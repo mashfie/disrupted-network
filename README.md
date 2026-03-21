@@ -77,14 +77,14 @@ claude
 **Windows — PowerShell (v2rayN without TUN/tunnel mode):**
 
 ```powershell
-$env:HTTP_PROXY = "http://127.0.0.1:10808"
-$env:HTTPS_PROXY = "http://127.0.0.1:10808"
+$env:HTTP_PROXY = "http://127.0.0.1:10809"
+$env:HTTPS_PROXY = "http://127.0.0.1:10809"
 claude
 ```
 
-Port `10808` is the v2rayN default. If it doesn't work, try `10809` (the dedicated HTTP inbound). Check **v2rayN → Settings → Inbounds** for your actual ports. If you're still not sure, check `https://status.claude.ai` — it may be a service outage, not a proxy issue.
+Port `10809` is v2rayN's dedicated HTTP inbound (SOCKS5 is on `10808`; PowerShell's `HTTP_PROXY` requires an HTTP proxy, not SOCKS5). Check **v2rayN → Settings → Inbounds** for your actual ports. If you're still not sure, check `https://status.claude.ai` — it may be a service outage, not a proxy issue.
 
-> v2rayN tip: recent xray-core versions accept HTTP CONNECT on the same port as SOCKS5, so `10808` often works for both. To persist this across terminals, add the `export` lines to your `~/.bashrc` or `~/.zshrc` (Linux/macOS), or add the PowerShell lines to your `$PROFILE` (Windows).
+> To persist this across terminals, add the `export` lines to your `~/.bashrc` or `~/.zshrc` (Linux/macOS), or add the PowerShell lines to your `$PROFILE` (Windows).
 
 ---
 

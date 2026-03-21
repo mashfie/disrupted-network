@@ -149,10 +149,10 @@ $(df -h "$PROJECT_ROOT" 2>/dev/null | tail -1 || echo "unknown")
 
 ## Connectivity
 - Run: $PROBE_CMD
-- Do NOT run when offline — probes only make sense with an active connection
+- Run this to diagnose your current network state before starting a session
 
 ## Key Installed Python Packages
-$(pip list 2>&1 | head -40 || pip3 list 2>&1 | head -40 || echo "pip not available")
+$({ pip list 2>/dev/null || pip3 list 2>/dev/null || echo "pip not available"; } | head -40)
 
 ## Project Root
 $PROJECT_ROOT

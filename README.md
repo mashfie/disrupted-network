@@ -60,6 +60,8 @@ bash ~/.claude/skills/disrupted-network/scripts/init-session.sh
 
 This creates `.claude-session/` with all the template files, auto-detects your running proxy, and copies the helper scripts (`netprobe.sh`, `checkpoint.sh`) into `.claude-session/scripts/`.
 
+> **Windows:** run this from WSL or Git Bash. The scripts require bash; they won't run in PowerShell or CMD.
+
 ### Step 3 — Set up your proxy environment
 
 Before running `claude`, set the proxy environment variables so Claude Code's API calls go through your VPN.

@@ -143,10 +143,7 @@ Generated: [timestamp]
 
 9. **Ensure `TODO.md` reflects reality.** Move completed items to Done. Update priorities.
 
-10. **Run checkpoint:**
-    ```bash
-    bash .claude-session/scripts/checkpoint.sh "description of current state"
-    ```
+10. **Append to `PROGRESS.md` and finalize `CONTEXT.md`.** Do not run `checkpoint.sh` — write the files directly. `checkpoint.sh` is a user tool for manual saves from a second terminal.
 
 ## User Tools
 

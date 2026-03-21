@@ -1,71 +1,70 @@
 # disrupted-network
 
-A Claude Code skill for working under Iranian internet disruption.
+When your internet cuts out mid-session, Claude loses its context and you have to re-explain everything from scratch. This skill prevents that by saving work state to disk throughout the session, so a fresh session can resume immediately from where things stopped — without you re-explaining anything.
 
-## What it does
+**This is a Claude Code (CLI) skill.** It does not work in the Claude.ai browser chat.
 
-When you're in Iran and Claude.ai gets cut off mid-session, this skill ensures your work context survives in `.claude-session/` on disk. A fresh session can resume immediately without you re-explaining anything.
+---
 
-**Primary feature:** Session persistence.
-**Secondary feature:** Proxy-aware connectivity guidance — probes go through your proxy, not directly to blocked foreign endpoints.
+## How it works
+
+Every session writes state into a `.claude-session/` directory in your project:
+
+- `CONTEXT.md` — what you're building, exactly where things stand, what's next
+- `TODO.md` — tasks split into "needs connection" and "ready offline"
+- `PROGRESS.md` — append-only log of completed steps
+- `FAILED_ATTEMPTS.md` — what failed and why, so the next session doesn't repeat it
+- `ENVIRONMENT.md` — your proxy config and last known connectivity
+
+When a new session starts and you invoke the skill, Claude reads those files and gives you a 2-3 line briefing. No re-explaining. You just continue.
+
+### What gets saved and what doesn't
+
+**Only what's been written to disk before a drop survives.** If the connection dies while Claude is mid-response, that response is gone — you get back to the last checkpoint. This is why the skill checkpoints continuously throughout a session, not just at the end. The disk is the only thing that survives between sessions.
+
+---
 
 ## Install
 
-```bash
-claude skills install https://github.com/mashfie/disrupted-network
-```
+### Step 1 — Put the skill where Claude Code can find it
 
-Or manually: copy `SKILL.md` into your Claude Code skills directory and reference it in `CLAUDE.md`.
-
-## When it activates
-
-Automatically when `.claude-session/` exists in your project root, or when you mention a proxy failure or network disruption. It does **not** trigger on general words like "resume", "checkpoint", or tool names — those cause too many false positives.
-
-## Proxy tools supported
-
-V2Ray / Xray / Psiphon / Cloudflare WARP / WireGuard / Sing-box / Hysteria2 / TUIC / Shadowsocks
-
-## Quick start
-
-Initialize session state at the start of a new project:
+**Global install** (available in all your projects — recommended):
 
 ```bash
-bash /path/to/disrupted-network/scripts/init-session.sh
+mkdir -p ~/.claude/skills/disrupted-network
+cp /path/to/disrupted-network/SKILL.md ~/.claude/skills/disrupted-network/SKILL.md
 ```
 
-This creates `.claude-session/` and auto-detects your running proxy.
-
-Probe connectivity (only run when your proxy is running):
+**Project-only install** (only available in this one project):
 
 ```bash
-bash .claude-session/scripts/netprobe.sh 10808   # replace with your SOCKS5 port
+mkdir -p .claude/skills/disrupted-network
+cp /path/to/disrupted-network/SKILL.md .claude/skills/disrupted-network/SKILL.md
 ```
 
-Manual checkpoint (also callable by the agent):
+You can clone the whole repo to get the scripts too:
 
 ```bash
-bash .claude-session/scripts/checkpoint.sh "description of current state"
+git clone https://github.com/mashfie/disrupted-network ~/.claude/skills/disrupted-network
 ```
 
-## DPI — when the proxy is up but `claude` still fails
+That's it. No `CLAUDE.md` changes needed. Claude Code discovers skills automatically from those directories.
 
-DPI (Deep Packet Inspection) can block specific connections even when your VPN/proxy is running. See **`linux-macos.md` → DPI section** for:
+### Step 2 — Initialize session state in your project
 
-- Protocol comparison (REALITY, Trojan, Hysteria2, VMess)
-- TCP fragmentation with v2rayN
-- Why setting `HTTPS_PROXY` already helps against DPI
-- Cloudflare WARP as a fallback
-- ECH (Encrypted Client Hello)
+Run this once per project (safe to re-run):
 
-Short answer: **VLESS+REALITY** is the most DPI-resistant protocol available in v2rayN/Xray. **Hysteria2 over QUIC/UDP** is a strong alternative when TCP-based tunnels are throttled.
+```bash
+bash ~/.claude/skills/disrupted-network/scripts/init-session.sh
+```
 
-## Why the probe doesn't hit Google or PyPI directly
+This creates `.claude-session/` with all the template files, auto-detects your running proxy, and copies the helper scripts (`netprobe.sh`, `checkpoint.sh`) into `.claude-session/scripts/`.
 
-These endpoints are blocked. A direct probe returns failure regardless of whether your proxy works. `netprobe.sh` checks the proxy port first, then tests reachability through the proxy.
+### Step 3 — Set up your proxy environment
 
-## Running the `claude` CLI through a proxy
+Before running `claude`, set the proxy environment variables so Claude Code's API calls go through your VPN.
 
-### Linux / macOS
+**Linux / macOS:**
 
 ```bash
 export HTTPS_PROXY="socks5h://127.0.0.1:10808"
@@ -73,9 +72,7 @@ export HTTP_PROXY="socks5h://127.0.0.1:10808"
 claude
 ```
 
-### Windows — v2rayN (without tunnel/TUN mode)
-
-In PowerShell, set the proxy environment variables before running `claude`:
+**Windows — PowerShell (v2rayN without TUN/tunnel mode):**
 
 ```powershell
 $env:HTTP_PROXY = "http://127.0.0.1:10808"
@@ -83,28 +80,118 @@ $env:HTTPS_PROXY = "http://127.0.0.1:10808"
 claude
 ```
 
-Recent xray-core versions (shipped with v2rayN) accept HTTP CONNECT on the same port as SOCKS5, so 10808 usually works. If it doesn't, try port 10809 (v2rayN's dedicated HTTP inbound). Check **v2rayN → Settings → Inbounds** for your actual ports.
+Port `10808` is the v2rayN default. If it doesn't work, try `10809` (the dedicated HTTP inbound). Check **v2rayN → Settings → Inbounds** for your actual ports. If you're still not sure, check `https://status.claude.ai` — it may be a service outage, not a proxy issue.
 
-To make this permanent for your PowerShell session, add it to your profile (`$PROFILE`).
+> v2rayN tip: recent xray-core versions accept HTTP CONNECT on the same port as SOCKS5, so `10808` often works for both. To persist this across terminals, add the `export` lines to your `~/.bashrc` or `~/.zshrc` (Linux/macOS), or add the PowerShell lines to your `$PROFILE` (Windows).
 
-> Check **https://status.claude.ai** first if `claude` seems unresponsive — it may be a service outage rather than a local proxy issue.
+---
 
-## Platform support
+## Using the skill
 
-Linux and macOS. See `linux-macos.md` for tool-specific setup, interface-based proxy detection (WireGuard, WARP), and system-wide proxy configuration. Windows notes are above.
+### The trigger
 
-## Files
+Type `/disrupted-network` at the start of any Claude Code message. That's it.
+
+```
+/disrupted-network
+```
+
+Claude Code will load the skill. If `.claude-session/` exists in your project, Claude reads it immediately and tells you where things stand. If it doesn't exist yet, Claude creates it and asks what you're working on.
+
+The skill **never auto-activates.** You control it explicitly with `/disrupted-network`. This prevents it from firing when you don't want it.
+
+### First session on a new project
+
+```
+/disrupted-network
+Let's build a data pipeline that processes CSV files and outputs to SQLite.
+My proxy is V2Ray SOCKS5 on 10808.
+```
+
+Claude creates the session state, records your proxy config, and starts working with checkpoints built in.
+
+### Resuming after a disconnection
+
+Just start Claude Code in the same project directory and run:
+
+```
+/disrupted-network
+```
+
+Claude reads `.claude-session/CONTEXT.md` and responds with something like:
+
+> "We were refactoring `extract_features()` in `src/pipeline.py` — the function signature was updated to include the `normalize` parameter but the body wasn't finished yet. `TODO.md` has two tasks queued for when you have a connection. Ready to continue?"
+
+You say yes. Work resumes.
+
+### Checking connectivity before a session
+
+Run the probe from your terminal (not from Claude) to understand your network state before starting:
+
+```bash
+bash .claude-session/scripts/netprobe.sh 10808   # your SOCKS5 port
+```
+
+| Result | Meaning |
+|--------|---------|
+| `CONNECTED` | Proxy working, foreign sites reachable — proceed normally |
+| `PROXY_DEGRADED` | Proxy running but foreign traffic blocked — DPI or server issue, work offline |
+| `PROXY_DOWN` | Local network up but proxy not running — start your proxy tool |
+| `OFFLINE` | No gateway — full outage |
+
+### Manual checkpoint from a second terminal
+
+If you notice the session getting sluggish and think a drop is coming, you can trigger a checkpoint yourself:
+
+```bash
+bash .claude-session/scripts/checkpoint.sh "halfway through normalize() implementation"
+```
+
+---
+
+## DPI — when the proxy is up but `claude` still fails
+
+DPI (Deep Packet Inspection) can block specific connections even when your VPN is running. The TLS ClientHello to `api.anthropic.com` contains a plaintext SNI that DPI can read and block.
+
+**Best protocols for DPI resistance** (strongest first):
+
+| Protocol | Notes |
+|----------|-------|
+| VLESS + REALITY | Mimics real TLS to a legitimate domain — gold standard |
+| Trojan + TLS | Looks like normal HTTPS |
+| Hysteria2 / QUIC (UDP) | UDP-based; most DPI tools can't deep-inspect QUIC |
+| VMess + WebSocket + TLS | Works through CDN fronting |
+| Plain VMess / Shadowsocks | Easily fingerprinted — avoid |
+
+**TCP fragmentation (v2rayN):** v2rayN has a Fragment feature that splits the TLS ClientHello into small segments, causing DPI engines to miss the SNI. Enable it in your Xray config:
+
+```json
+"sockopt": {
+  "dialerProxy": "fragment",
+  "fragment": { "packets": "tlshello", "length": "100-200", "interval": "10-20" }
+}
+```
+
+**Why `HTTPS_PROXY` already helps:** When Claude Code uses `HTTPS_PROXY`, it sends a `CONNECT api.anthropic.com:443` request to your local proxy, which tunnels it through the VPN. The DPI at the ISP level only sees your VPN protocol — not the Anthropic SNI. Setting `HTTPS_PROXY` is not optional, it's the whole point.
+
+See `linux-macos.md` for more detail on proxy tool setup and diagnosing `PROXY_DEGRADED`.
+
+---
+
+## Files in this repo
 
 | File | Purpose |
 |------|---------|
-| `SKILL.md` | Claude Code skill definition |
-| `scripts/init-session.sh` | Bootstrap `.claude-session/` |
-| `scripts/netprobe.sh` | Proxy-aware connectivity probe |
+| `SKILL.md` | The skill definition — copy this to your skills directory |
+| `scripts/init-session.sh` | Bootstrap `.claude-session/` in a project |
+| `scripts/netprobe.sh` | Connectivity probe (user runs this, not Claude) |
 | `scripts/checkpoint.sh` | Timestamped progress checkpoint |
-| `linux-macos.md` | Platform-specific proxy notes |
-| `archive/` | Previous generic versions (v1, v2) |
+| `linux-macos.md` | Proxy tool setup, DPI details, platform notes |
+| `archive/v1-SKILL.md` | Original generic version (no proxy awareness) |
+
+---
 
 ## Versions
 
-- **Current (`SKILL.md`)** — Iranian context, proxy-aware, session persistence as primary feature
-- **`archive/v1-SKILL.md`** — Original generic version (session persistence only, no proxy awareness)
+- **Current (`SKILL.md`)** — Proxy-aware, session persistence, built for restricted network environments
+- **`archive/v1-SKILL.md`** — Original generic version (session persistence only)

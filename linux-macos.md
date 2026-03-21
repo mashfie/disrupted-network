@@ -173,15 +173,15 @@ The scripts use `nc -z -w N` (BSD-compatible syntax) and `curl -m N` (no GNU `ti
 
 ## Diagnosing PROXY_DEGRADED
 
-When the proxy is up but traffic is blocked:
+Local network up, proxy running, but foreign endpoints unreachable through it.
 
-1. **Check if it's DPI blocking your protocol.** V2Ray/Xray uses traffic obfuscation — make sure your config uses a working transport (VLESS+Reality or VMess+WebSocket+TLS tends to survive DPI better than plain VMess).
+1. **Check if it's DPI blocking your protocol.** Make sure your config uses a resistant transport — VLESS+REALITY or VMess+WebSocket+TLS survives DPI far better than plain VMess.
 
-2. **Check if the proxy server itself is unreachable** (foreign server blocked by IP). Try switching servers/subscriptions.
+2. **Check if the remote server itself is blocked** (IP blocked, not protocol). Try switching servers or subscription endpoints.
 
-3. **Check if it's a temporary outage** (elections, protests). National outages are complete and sudden. If GitHub returns TIMEOUT through proxy, it's likely the server, not DPI.
+3. **Check if it's a blanket outage.** If GitHub, PyPI, and npm all return TIMEOUT through proxy simultaneously, it's likely a national-level block event, not a local config issue.
 
-4. **Hysteria2 over QUIC may work when TCP-based proxies don't.** UDP is harder to DPI.
+4. **Hysteria2 over QUIC may work when TCP-based proxies are throttled.** UDP traffic is harder to rate-limit precisely.
 
 ## DPI — making `claude` CLI more reliable
 

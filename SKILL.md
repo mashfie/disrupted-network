@@ -207,8 +207,8 @@ bash /path/to/disrupted-network/scripts/init-session.sh
 Run from your terminal to diagnose connectivity **before starting a Claude session**, or after a failure. Tests three layers:
 
 1. Proxy port (no network needed)
-2. Iranian intranet endpoints directly (`khamenei.ir`, `snapp.ir`, `arvancloud.ir`) — reachable without proxy; tells you if national internet exists
-3. Foreign endpoints through proxy (`pypi.org`, `github.com`, `npmjs.org`) — only if proxy is up; never tested directly (blocked by SHOMA)
+2. Local network: gateway ping (no external traffic) + intranet endpoints (`snapp.ir`, `arvancloud.ir`, `khamenei.ir`) directly without proxy — these are reachable for anyone in Iran without a VPN
+3. Foreign endpoints through proxy (`pypi.org`, `github.com`, `npmjs.org`) — only if proxy is up; **never tested without proxy**
 
 ```bash
 bash .claude-session/scripts/netprobe.sh 10808   # your SOCKS5 port
@@ -217,9 +217,9 @@ bash .claude-session/scripts/netprobe.sh 10808   # your SOCKS5 port
 | Result | Meaning |
 |--------|---------|
 | CONNECTED | Proxy working, foreign reachable |
-| PROXY_DEGRADED | Proxy up, intranet reachable, foreign blocked (DPI or server down) |
-| PROXY_DOWN | Intranet reachable, proxy not running — start your proxy tool |
-| OFFLINE | Even intranet unreachable — full outage |
+| PROXY_DEGRADED | Local network up, proxy up, foreign blocked — DPI active or remote server unreachable |
+| PROXY_DOWN | Local network up, proxy not running — start your proxy tool |
+| OFFLINE | Gateway unreachable — full outage or no active interface |
 
 ### checkpoint.sh
 

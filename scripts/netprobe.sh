@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# netprobe.sh — Connectivity probe for Iranian network conditions
+# netprobe.sh — Connectivity probe for restricted network conditions
 # Usage: bash .claude-session/scripts/netprobe.sh [SOCKS5_PORT]
+#
+# USER-RUN TOOL ONLY. Claude does not call this script autonomously.
 #
 # Tests in three layers:
 #   1. Proxy port (no network required)
-#   2. Iranian intranet endpoints directly (no proxy) — reachable even without VPN
-#   3. Foreign endpoints through proxy — blocked by SHOMA without proxy
+#   2. Local network — default gateway ping (zero external traffic) +
+#      Iranian intranet endpoints (direct, no proxy) to confirm national internet
+#   3. Foreign endpoints through proxy only — never tested without proxy
 #
-# Iranian intranet endpoints serve as ground truth: if they fail, you're fully offline.
-# Foreign endpoints are tested only through the proxy — testing them directly is pointless.
-#
-# Requires: curl, nc (netcat)
-# macOS: both built-in. Linux: apt install netcat-openbsd if nc is missing.
+# Requires: curl, nc (netcat), ping
+# macOS: all built-in. Linux: apt install netcat-openbsd if nc is missing.
 
 set -euo pipefail
 
@@ -22,6 +22,9 @@ SOCKS5_PORT="${1:-10808}"
 command -v curl &>/dev/null || { echo "Error: curl not found" >&2; exit 1; }
 command -v nc   &>/dev/null || { echo "Error: nc not found — install netcat-openbsd" >&2; exit 1; }
 
+TMPDIR_PROBE=$(mktemp -d)
+trap 'rm -rf "$TMPDIR_PROBE"' EXIT
+
 echo "=== Network Probe: $TIMESTAMP ==="
 echo ""
 
@@ -31,42 +34,53 @@ nc -z -w 2 127.0.0.1 "$SOCKS5_PORT" 2>/dev/null && SOCKS5_STATUS="LISTENING"
 echo "Proxy (SOCKS5 :$SOCKS5_PORT): $SOCKS5_STATUS"
 echo ""
 
-# ── Layer 2: Iranian intranet (direct, no proxy) ────────────────────────────
-# These are on Iran's national network — reachable even with no VPN/proxy.
-# Use --noproxy '*' to bypass any https_proxy env var that might be set.
-echo "Iranian intranet (direct — no proxy):"
+# ── Layer 2: Local network ───────────────────────────────────────────────────
+LOCAL_UP=false
+INTRANET_UP=false
+
+# 2a. Gateway ping — instant, no DNS, no DPI. Tells you if the interface is alive.
+GATEWAY=""
+GATEWAY=$(ip route 2>/dev/null | awk '/^default/{print $3; exit}')
+if [ -z "$GATEWAY" ]; then
+    GATEWAY=$(netstat -rn 2>/dev/null | awk '/^default/{print $2; exit}')
+fi
+
+echo "Local network:"
+if [ -n "$GATEWAY" ]; then
+    if ping -c 1 -W 2 "$GATEWAY" >/dev/null 2>&1; then
+        LOCAL_UP=true
+        echo "  Gateway ($GATEWAY): reachable"
+    else
+        echo "  Gateway ($GATEWAY): unreachable"
+    fi
+else
+    echo "  No default gateway found (interface down?)"
+fi
+
+# 2b. Intranet endpoints — direct, no proxy. Reachable for anyone in Iran
+# without a VPN. Use --noproxy to bypass any proxy env vars that may be set.
 test_intranet() {
-    local name="$1" url="$2" code
+    local url="$1" code
     code=$(curl -s -m 6 -o /dev/null -w "%{http_code}" --noproxy '*' "$url" 2>/dev/null) \
         || code="TIMEOUT"
     [ "$code" = "000" ] && code="DNS_FAIL"
-    echo "  $name: $code"
     echo "$code"
 }
 
-TMPDIR_PROBE=$(mktemp -d)
-test_intranet "khamenei.ir"   "https://khamenei.ir"   > "$TMPDIR_PROBE/kh"   2>&1 &
-test_intranet "snapp.ir"      "https://snapp.ir"       > "$TMPDIR_PROBE/sn"   2>&1 &
-test_intranet "arvancloud.ir" "https://arvancloud.ir"  > "$TMPDIR_PROBE/ar"   2>&1 &
+test_intranet "https://snapp.ir"       > "$TMPDIR_PROBE/sn" &
+test_intranet "https://arvancloud.ir"  > "$TMPDIR_PROBE/ar" &
+test_intranet "https://khamenei.ir"    > "$TMPDIR_PROBE/kh" &
 wait
 
-# Extract only the last line (the status code) from each result file
-KH_CODE=$(tail -1 "$TMPDIR_PROBE/kh")
-SN_CODE=$(tail -1 "$TMPDIR_PROBE/sn")
-AR_CODE=$(tail -1 "$TMPDIR_PROBE/ar")
+SN_CODE=$(cat "$TMPDIR_PROBE/sn")
+AR_CODE=$(cat "$TMPDIR_PROBE/ar")
+KH_CODE=$(cat "$TMPDIR_PROBE/kh")
 
-# Print results (the echo in test_intranet already printed with indent)
-# Re-check: test_intranet echoes the display line first, then the code. Let's reprint cleanly.
-echo "  khamenei.ir:   $KH_CODE"
 echo "  snapp.ir:      $SN_CODE"
 echo "  arvancloud.ir: $AR_CODE"
+echo "  khamenei.ir:   $KH_CODE"
 
-INTRANET_UP=false
-if echo "$KH_CODE $SN_CODE $AR_CODE" | grep -qE "^[23][0-9][0-9] |[23][0-9][0-9]$| [23][0-9][0-9] | [23][0-9][0-9]$"; then
-    INTRANET_UP=true
-fi
-# Simpler check: any 2xx or 3xx code
-for code in "$KH_CODE" "$SN_CODE" "$AR_CODE"; do
+for code in "$SN_CODE" "$AR_CODE" "$KH_CODE"; do
     if echo "$code" | grep -qE "^[23][0-9][0-9]$"; then
         INTRANET_UP=true
     fi
@@ -80,24 +94,24 @@ FOREIGN_DETAIL=""
 
 if [ "$SOCKS5_STATUS" = "LISTENING" ]; then
     echo "Foreign endpoints (through proxy socks5h://127.0.0.1:$SOCKS5_PORT):"
+
     test_via_proxy() {
-        local name="$1" url="$2" code
+        local url="$1" code
         code=$(curl -s -m 10 -o /dev/null -w "%{http_code}" \
             --socks5-hostname "127.0.0.1:$SOCKS5_PORT" "$url" 2>/dev/null) \
             || code="TIMEOUT"
         [ "$code" = "000" ] && code="CONNECT_FAIL"
-        echo "  $name: $code"
         echo "$code"
     }
 
-    test_via_proxy "PyPI"   "https://pypi.org/simple/"    > "$TMPDIR_PROBE/pypi" 2>&1 &
-    test_via_proxy "GitHub" "https://github.com"          > "$TMPDIR_PROBE/gh"   2>&1 &
-    test_via_proxy "npm"    "https://registry.npmjs.org/" > "$TMPDIR_PROBE/npm"  2>&1 &
+    test_via_proxy "https://pypi.org/simple/"    > "$TMPDIR_PROBE/pypi" &
+    test_via_proxy "https://github.com"          > "$TMPDIR_PROBE/gh"   &
+    test_via_proxy "https://registry.npmjs.org/" > "$TMPDIR_PROBE/npm"  &
     wait
 
-    PY_CODE=$(tail -1 "$TMPDIR_PROBE/pypi")
-    GH_CODE=$(tail -1 "$TMPDIR_PROBE/gh")
-    NP_CODE=$(tail -1 "$TMPDIR_PROBE/npm")
+    PY_CODE=$(cat "$TMPDIR_PROBE/pypi")
+    GH_CODE=$(cat "$TMPDIR_PROBE/gh")
+    NP_CODE=$(cat "$TMPDIR_PROBE/npm")
 
     echo "  PyPI:   $PY_CODE"
     echo "  GitHub: $GH_CODE"
@@ -112,24 +126,22 @@ if [ "$SOCKS5_STATUS" = "LISTENING" ]; then
     echo ""
 fi
 
-rm -rf "$TMPDIR_PROBE"
-
 # ── Determine status ─────────────────────────────────────────────────────────
 if $FOREIGN_UP; then
     STATUS="CONNECTED"
     ADVICE="Proxy working. Run your network queue."
 elif [ "$SOCKS5_STATUS" = "LISTENING" ] && $INTRANET_UP; then
     STATUS="PROXY_DEGRADED"
-    ADVICE="Intranet up, proxy up, but foreign traffic blocked. DPI is active or remote server is unreachable. Work offline."
+    ADVICE="Intranet reachable, proxy up, foreign traffic blocked. DPI active or remote server unreachable. Work offline."
 elif [ "$SOCKS5_STATUS" = "NOT_LISTENING" ] && $INTRANET_UP; then
     STATUS="PROXY_DOWN"
-    ADVICE="Intranet up but proxy is not running. Start your proxy tool (V2Ray, Xray, Psiphon, etc.)."
-elif ! $INTRANET_UP && [ "$SOCKS5_STATUS" = "LISTENING" ]; then
+    ADVICE="Intranet up but proxy is not running. Start your proxy tool."
+elif $LOCAL_UP && ! $INTRANET_UP && [ "$SOCKS5_STATUS" = "LISTENING" ]; then
     STATUS="PROXY_DEGRADED"
-    ADVICE="Proxy running but even intranet is unreachable. Full outage or severe throttling."
+    ADVICE="Gateway up but even intranet is unreachable — full outage or severe throttling."
 else
     STATUS="OFFLINE"
-    ADVICE="No connectivity — not even intranet endpoints respond. Full outage or no internet."
+    ADVICE="Gateway unreachable — full outage or no active network interface."
 fi
 
 echo "Status: $STATUS"
@@ -142,6 +154,7 @@ if [ -f "$SESSION_DIR/ENVIRONMENT.md" ]; then
 ## Network Probe: $TIMESTAMP
 - Status: $STATUS
 - Proxy (:$SOCKS5_PORT): $SOCKS5_STATUS
+- Local (gateway): $($LOCAL_UP && echo "reachable" || echo "unreachable")
 - Intranet: $($INTRANET_UP && echo "reachable" || echo "unreachable")
 - Foreign (via proxy): $($FOREIGN_UP && echo "reachable" || echo "blocked/skipped") $FOREIGN_DETAIL
 EOF

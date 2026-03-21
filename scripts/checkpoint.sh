@@ -11,8 +11,8 @@ SESSION_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 DESCRIPTION="${1:-Manual checkpoint (no description provided)}"
 
-# Ensure progress file exists with header
-if [ ! -f "$SESSION_DIR/PROGRESS.md" ] || ! grep -q "^# Progress Log" "$SESSION_DIR/PROGRESS.md" 2>/dev/null; then
+# Ensure progress file exists with header (never truncate an existing file)
+if [ ! -f "$SESSION_DIR/PROGRESS.md" ]; then
     printf "# Progress Log\n\n" > "$SESSION_DIR/PROGRESS.md"
 fi
 

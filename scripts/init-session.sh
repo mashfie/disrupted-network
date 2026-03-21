@@ -151,7 +151,7 @@ $(df -h "$PROJECT_ROOT" 2>/dev/null | tail -1 || echo "unknown")
 - Run this to diagnose your current network state before starting a session
 
 ## Key Installed Python Packages
-$({ pip list 2>/dev/null || pip3 list 2>/dev/null || echo "pip not available"; } | head -40)
+$({ pip list 2>/dev/null || pip3 list 2>/dev/null || echo "pip not available"; } | head -40 || true)
 
 ## Project Root
 $PROJECT_ROOT

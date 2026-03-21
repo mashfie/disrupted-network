@@ -40,9 +40,11 @@ INTRANET_UP=false
 
 # 2a. Gateway ping — instant, no DNS, no DPI. Tells you if the interface is alive.
 GATEWAY=""
-GATEWAY=$(ip route 2>/dev/null | awk '/^default/{print $3; exit}')
+GATEWAY=$(ip route 2>/dev/null | awk '/^default/{print $3; exit}') || true
 if [ -z "$GATEWAY" ]; then
-    GATEWAY=$(netstat -rn 2>/dev/null | awk '/^default/{print $2; exit}')
+    # macOS: 'default' row, $2 is gateway
+    # Linux (netstat fallback): '0.0.0.0' destination row, $2 is gateway
+    GATEWAY=$(netstat -rn 2>/dev/null | awk '/^default/{print $2; exit} /^0\.0\.0\.0/{print $2; exit}') || true
 fi
 
 # ping -W unit differs: Linux = seconds, macOS = milliseconds

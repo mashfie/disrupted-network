@@ -164,9 +164,9 @@ bash .claude-session/scripts/netprobe.sh 10808   # your SOCKS5 port
 | Result | Meaning |
 |--------|---------|
 | CONNECTED | Proxy working, foreign reachable |
-| PROXY_DEGRADED | Local network up, proxy up, foreign blocked — DPI active or remote server unreachable |
+| PROXY_DEGRADED | Local network up, proxy up, foreign blocked — DPI active or remote server unreachable (one variant: even intranet unreachable — full outage or severe throttling) |
 | PROXY_DOWN | Local network up, proxy not running — start your proxy tool |
-| OFFLINE | Gateway unreachable — full outage or no active interface |
+| OFFLINE | No internet access — gateway unreachable, or local-only connectivity with proxy not running |
 
 ### checkpoint.sh
 
@@ -219,6 +219,7 @@ For interface-based tools (WireGuard, WARP), there is no SOCKS5 port — verify 
 ## Anti-Patterns
 
 - **Don't run connectivity probes.** If you're here, the connection is working. Probes are the user's job.
+- **Don't run `checkpoint.sh`.** Write the session files directly. `checkpoint.sh` is a second-terminal tool for the user.
 - **Don't retry failed network operations in a loop.** Log and move on.
 - **Don't assume the next session is you.** Write `CONTEXT.md` for a stranger.
 - **Don't leave state in terminal output.** Files only.

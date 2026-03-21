@@ -177,7 +177,7 @@ bash .claude-session/scripts/netprobe.sh 10808   # your SOCKS5 port
 | `CONNECTED` | Proxy working, foreign sites reachable — proceed normally |
 | `PROXY_DEGRADED` | Proxy running but foreign traffic blocked — DPI or server issue, work offline |
 | `PROXY_DOWN` | Local network up but proxy not running — start your proxy tool |
-| `OFFLINE` | No gateway — full outage |
+| `OFFLINE` | No internet — gateway unreachable or no external connectivity (if gateway is up: start your proxy tool) |
 
 ### Manual checkpoint from a second terminal
 

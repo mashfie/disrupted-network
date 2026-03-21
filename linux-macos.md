@@ -179,6 +179,74 @@ When the proxy is up but traffic is blocked:
 
 2. **Check if the proxy server itself is unreachable** (foreign server blocked by IP). Try switching servers/subscriptions.
 
-3. **Check if it's a temporary outage** (elections, protests). Iran's national outages are complete and sudden. If GitHub returns TIMEOUT through proxy, it's likely the server, not DPI.
+3. **Check if it's a temporary outage** (elections, protests). National outages are complete and sudden. If GitHub returns TIMEOUT through proxy, it's likely the server, not DPI.
 
 4. **Hysteria2 over QUIC may work when TCP-based proxies don't.** UDP is harder to DPI.
+
+## DPI — making `claude` CLI more reliable
+
+DPI (Deep Packet Inspection) can identify and throttle or block specific TLS connections even when a proxy is running. When `claude` connects to `api.anthropic.com`, the TLS ClientHello contains the SNI (Server Name Indication) in plaintext — DPI can read this even on encrypted connections.
+
+### Protocol choices (strongest to weakest against DPI)
+
+| Protocol | DPI resistance | Notes |
+|----------|---------------|-------|
+| VLESS + REALITY | Excellent | Mimics real TLS to a legit domain (e.g. microsoft.com). Gold standard. |
+| VLESS + Vision + TLS | Very good | XTLS splice mode, minimal overhead |
+| Trojan + TLS | Good | Looks like HTTPS traffic |
+| VMess + WebSocket + TLS | Good | Works through CDN fronting |
+| Hysteria2 (QUIC/UDP) | Good | UDP-based; DPI tools often can't deep-inspect QUIC |
+| Plain VMess / Shadowsocks | Poor | Fingerprinted and blocked more easily |
+
+### TCP fragmentation (v2rayN built-in)
+
+v2rayN has a **Fragment** feature that splits the TLS ClientHello into small TCP segments. DPI engines that reassemble packets partially often miss the SNI in a fragmented ClientHello.
+
+Enable in v2rayN: **Settings → Core: Xray → (edit config JSON)** and add to outbound:
+```json
+"sockopt": {
+  "dialerProxy": "fragment",
+  "fragment": {
+    "packets": "tlshello",
+    "length": "100-200",
+    "interval": "10-20"
+  }
+}
+```
+Or use v2rayN's GUI option under **Settings → Fragment** if your version exposes it.
+
+### Using the HTTP proxy port for `claude`
+
+When `HTTPS_PROXY` is set to an HTTP proxy, `claude` sends a `CONNECT api.anthropic.com:443` request to the local proxy, which then tunnels the TLS through the VPN — so the DPI at the ISP level only sees your VPN protocol, never `api.anthropic.com`. This is the standard behavior and is already correct if you've set `HTTP_PROXY`/`HTTPS_PROXY`.
+
+```bash
+# Use the HTTP inbound (v2rayN default: 10809) — equivalent in effect to SOCKS5
+export HTTPS_PROXY="http://127.0.0.1:10809"
+export HTTP_PROXY="http://127.0.0.1:10809"
+claude
+```
+
+### Cloudflare WARP as a fallback
+
+WARP uses WireGuard and routes all traffic through Cloudflare's network. It's not a silver bullet against DPI (the WireGuard handshake is identifiable), but Cloudflare's infrastructure often has more routes around blockages than individual proxy servers.
+
+```bash
+warp-cli connect
+warp-cli status
+# No proxy env vars needed — all traffic goes through the WARP interface
+claude
+```
+
+### ECH (Encrypted Client Hello)
+
+Some recent clients support ECH, which encrypts the SNI. Support requires both the client and the target server. As of 2025, `api.anthropic.com` may not support ECH, but this is worth watching as it evolves.
+
+### Checking service status before debugging proxies
+
+Before spending time on proxy config, verify the issue isn't on Anthropic's side:
+
+```
+https://status.claude.ai
+```
+
+If there's an ongoing incident, no proxy configuration will help.

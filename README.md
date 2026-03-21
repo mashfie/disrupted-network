@@ -20,7 +20,11 @@ When a new session starts and you invoke the skill, Claude reads those files and
 
 ### What gets saved and what doesn't
 
-**Only what's been written to disk before a drop survives.** If the connection dies while Claude is mid-response, that response is gone — you get back to the last checkpoint. This is why the skill checkpoints continuously throughout a session, not just at the end. The disk is the only thing that survives between sessions.
+**Only what's been written to disk before a drop survives.** If the connection dies while Claude is mid-response, that response is gone — you get back to the last checkpoint. This is why the skill checkpoints continuously throughout a session, not just at the end.
+
+### What about tmux?
+
+tmux keeps your **terminal session** alive across drops. This keeps **Claude's context** alive. When the Claude API connection dies, the server-side context window is gone regardless of tmux — the two problems are separate. tmux and this skill are complementary: tmux for the terminal, this for Claude's memory.
 
 ---
 
@@ -30,25 +34,11 @@ When a new session starts and you invoke the skill, Claude reads those files and
 
 **Step 1 — Put the skill where Claude Code can find it**
 
-Clone the whole repo (recommended — includes the helper scripts):
-
 ```bash
 git clone https://github.com/mashfie/disrupted-network ~/.claude/skills/disrupted-network
 ```
 
-Or copy just the skill file if you don't want the scripts:
-
-```bash
-# Global install (available in all your projects)
-mkdir -p ~/.claude/skills/disrupted-network
-cp /path/to/disrupted-network/SKILL.md ~/.claude/skills/disrupted-network/SKILL.md
-
-# Project-only install
-mkdir -p .claude/skills/disrupted-network
-cp /path/to/disrupted-network/SKILL.md .claude/skills/disrupted-network/SKILL.md
-```
-
-No `CLAUDE.md` changes needed. Claude Code discovers skills automatically from those directories.
+No `CLAUDE.md` changes needed. Claude Code discovers skills automatically.
 
 **Step 2 — Initialize session state in your project**
 
@@ -58,45 +48,15 @@ Run once per project (safe to re-run):
 bash ~/.claude/skills/disrupted-network/scripts/init-session.sh
 ```
 
-This creates `.claude-session/`, auto-detects your running proxy, and copies the helper scripts into `.claude-session/scripts/`.
+This creates `.claude-session/`, auto-detects your running proxy, and copies the helper scripts.
 
 ---
 
 ### Windows
 
-The bash scripts (`init-session.sh`, `netprobe.sh`, `checkpoint.sh`) require bash. Run them from **WSL** or **Git Bash** — they will not work in PowerShell or CMD.
+The bash scripts require **WSL2** or **Git Bash** — they will not run in PowerShell or CMD.
 
-**Step 1 — Put the skill where Claude Code can find it**
-
-In PowerShell:
-
-```powershell
-# Create the skills directory
-New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\skills\disrupted-network"
-
-# Clone the repo into it (requires Git)
-git clone https://github.com/mashfie/disrupted-network "$env:USERPROFILE\.claude\skills\disrupted-network"
-```
-
-Or from WSL / Git Bash:
-
-```bash
-git clone https://github.com/mashfie/disrupted-network ~/.claude/skills/disrupted-network
-```
-
-**Step 2 — Initialize session state in your project (run from WSL or Git Bash)**
-
-```bash
-bash ~/.claude/skills/disrupted-network/scripts/init-session.sh
-```
-
-If you're using Git Bash, replace `~` with the Windows path if needed:
-
-```bash
-bash "$USERPROFILE/.claude/skills/disrupted-network/scripts/init-session.sh"
-```
-
-> `netprobe.sh` and `checkpoint.sh` also require WSL or Git Bash when you need to run them.
+See **`windows.md`** for the full Windows setup guide, including v2rayN configuration, WSL2 proxy routing, and common failures.
 
 ---
 
@@ -112,35 +72,33 @@ export HTTP_PROXY="socks5h://127.0.0.1:10808"
 claude
 ```
 
-**Windows — PowerShell (v2rayN without TUN/tunnel mode):**
+**Windows — PowerShell (v2rayN, Windows-native `claude`):**
 
 ```powershell
-$env:HTTP_PROXY = "http://127.0.0.1:10809"
+$env:HTTPS_PROXY = "http://127.0.0.1:10809"
 $env:HTTPS_PROXY = "http://127.0.0.1:10809"
 claude
 ```
 
-Port `10809` is v2rayN's dedicated HTTP inbound (SOCKS5 is on `10808`; PowerShell's `HTTP_PROXY` requires an HTTP proxy, not SOCKS5). Check **v2rayN → Settings → Inbounds** for your actual ports. If you're still not sure, check `https://status.claude.ai` — it may be a service outage, not a proxy issue.
+Port `10809` is v2rayN's HTTP inbound. PowerShell requires an HTTP proxy, not SOCKS5. See `windows.md` for WSL2 and Git Bash variants.
 
-> To persist this across terminals, add the `export` lines to your `~/.bashrc` or `~/.zshrc` (Linux/macOS), or add the PowerShell lines to your `$PROFILE` (Windows).
+> To persist across terminals: add the `export` lines to `~/.bashrc` or `~/.zshrc` (Linux/macOS), or to your `$PROFILE` (PowerShell).
 
 ---
 
 ## Using the skill
 
-### The trigger
+### Trigger
 
-Type `/disrupted-network` at the start of any Claude Code message. That's it.
+Type `/disrupted-network` at the start of any Claude Code message:
 
 ```
 /disrupted-network
 ```
 
-Claude Code will load the skill. If `.claude-session/` exists in your project, Claude reads it immediately and tells you where things stand. If it doesn't exist yet, Claude creates it and asks what you're working on.
+Claude loads the skill. If `.claude-session/` exists, it reads the files and briefs you on where things stand. If not, it creates the session state and asks what you're working on. The skill **never auto-activates** — you control it with `/disrupted-network`.
 
-The skill **never auto-activates.** You control it explicitly with `/disrupted-network`. This prevents it from firing when you don't want it.
-
-### First session on a new project
+### First session
 
 ```
 /disrupted-network
@@ -148,11 +106,7 @@ Let's build a data pipeline that processes CSV files and outputs to SQLite.
 My proxy is V2Ray SOCKS5 on 10808.
 ```
 
-Claude creates the session state, records your proxy config, and starts working with checkpoints built in.
-
-### Resuming after a disconnection
-
-Just start Claude Code in the same project directory and run:
+### Resuming after a drop
 
 ```
 /disrupted-network
@@ -160,13 +114,11 @@ Just start Claude Code in the same project directory and run:
 
 Claude reads `.claude-session/CONTEXT.md` and responds with something like:
 
-> "We were refactoring `extract_features()` in `src/pipeline.py` — the function signature was updated to include the `normalize` parameter but the body wasn't finished yet. `TODO.md` has two tasks queued for when you have a connection. Ready to continue?"
-
-You say yes. Work resumes.
+> "We were refactoring `extract_features()` in `src/pipeline.py` — the function signature was updated but the body wasn't finished. `TODO.md` has two tasks queued for when you have a connection. Ready to continue?"
 
 ### Checking connectivity before a session
 
-Run the probe from your terminal (not from Claude) to understand your network state before starting:
+Run from your terminal (not from Claude):
 
 ```bash
 bash .claude-session/scripts/netprobe.sh 10808   # your SOCKS5 port
@@ -174,14 +126,16 @@ bash .claude-session/scripts/netprobe.sh 10808   # your SOCKS5 port
 
 | Result | Meaning |
 |--------|---------|
-| `CONNECTED` | Proxy working, foreign sites reachable — proceed normally |
-| `PROXY_DEGRADED` | Proxy running but foreign traffic blocked — DPI or server issue, work offline |
-| `PROXY_DOWN` | Local network up but proxy not running — start your proxy tool |
-| `OFFLINE` | No internet — gateway unreachable or no external connectivity (if gateway is up: start your proxy tool) |
+| `CONNECTED` | Proxy working, foreign sites reachable |
+| `PROXY_DEGRADED` | Proxy up but foreign traffic blocked — DPI or server issue |
+| `PROXY_DOWN` | Local network up but proxy not running |
+| `OFFLINE` | No internet — gateway unreachable or no external connectivity |
 
-### Manual checkpoint from a second terminal
+See `linux-macos.md` or `windows.md` for the full diagnostic flowchart.
 
-If you notice the session getting sluggish and think a drop is coming, you can trigger a checkpoint yourself:
+### Manual checkpoint
+
+If the session feels unstable, trigger a checkpoint from a second terminal:
 
 ```bash
 bash .claude-session/scripts/checkpoint.sh "halfway through normalize() implementation"
@@ -189,44 +143,16 @@ bash .claude-session/scripts/checkpoint.sh "halfway through normalize() implemen
 
 ---
 
-## DPI — when the proxy is up but `claude` still fails
-
-DPI (Deep Packet Inspection) can block specific connections even when your VPN is running. The TLS ClientHello to `api.anthropic.com` contains a plaintext SNI that DPI can read and block.
-
-**Best protocols for DPI resistance** (strongest first):
-
-| Protocol | Notes |
-|----------|-------|
-| VLESS + REALITY | Mimics real TLS to a legitimate domain — gold standard |
-| Trojan + TLS | Looks like normal HTTPS |
-| Hysteria2 / QUIC (UDP) | UDP-based; most DPI tools can't deep-inspect QUIC |
-| VMess + WebSocket + TLS | Works through CDN fronting |
-| Plain VMess / Shadowsocks | Easily fingerprinted — avoid |
-
-**TCP fragmentation (v2rayN):** v2rayN has a Fragment feature that splits the TLS ClientHello into small segments, causing DPI engines to miss the SNI. Enable it in your Xray config:
-
-```json
-"sockopt": {
-  "dialerProxy": "fragment",
-  "fragment": { "packets": "tlshello", "length": "100-200", "interval": "10-20" }
-}
-```
-
-**Why `HTTPS_PROXY` already helps:** When Claude Code uses `HTTPS_PROXY`, it sends a `CONNECT api.anthropic.com:443` request to your local proxy, which tunnels it through the VPN. The DPI at the ISP level only sees your VPN protocol — not the Anthropic SNI. Setting `HTTPS_PROXY` is not optional, it's the whole point.
-
-See `linux-macos.md` for more detail on proxy tool setup and diagnosing `PROXY_DEGRADED`.
-
----
-
 ## Files in this repo
 
 | File | Purpose |
 |------|---------|
-| `SKILL.md` | The skill definition — copy this to your skills directory |
+| `SKILL.md` | The skill definition — loaded by Claude Code |
 | `scripts/init-session.sh` | Bootstrap `.claude-session/` in a project |
 | `scripts/netprobe.sh` | Connectivity probe (user runs this, not Claude) |
 | `scripts/checkpoint.sh` | Timestamped progress checkpoint |
-| `linux-macos.md` | Proxy tool setup, DPI details, platform notes |
+| `linux-macos.md` | Proxy setup, diagnostic flowchart, DPI guide (Linux & macOS) |
+| `windows.md` | Full Windows guide — v2rayN, WSL2, Git Bash, common failures |
 | `archive/v1-SKILL.md` | Original generic version (no proxy awareness) |
 
 ---

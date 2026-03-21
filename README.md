@@ -26,39 +26,79 @@ When a new session starts and you invoke the skill, Claude reads those files and
 
 ## Install
 
-### Step 1 — Put the skill where Claude Code can find it
+### Linux / macOS
 
-**Global install** (available in all your projects — recommended):
+**Step 1 — Put the skill where Claude Code can find it**
 
-```bash
-mkdir -p ~/.claude/skills/disrupted-network
-cp /path/to/disrupted-network/SKILL.md ~/.claude/skills/disrupted-network/SKILL.md
-```
-
-**Project-only install** (only available in this one project):
-
-```bash
-mkdir -p .claude/skills/disrupted-network
-cp /path/to/disrupted-network/SKILL.md .claude/skills/disrupted-network/SKILL.md
-```
-
-You can clone the whole repo to get the scripts too:
+Clone the whole repo (recommended — includes the helper scripts):
 
 ```bash
 git clone https://github.com/mashfie/disrupted-network ~/.claude/skills/disrupted-network
 ```
 
-That's it. No `CLAUDE.md` changes needed. Claude Code discovers skills automatically from those directories.
+Or copy just the skill file if you don't want the scripts:
 
-### Step 2 — Initialize session state in your project
+```bash
+# Global install (available in all your projects)
+mkdir -p ~/.claude/skills/disrupted-network
+cp /path/to/disrupted-network/SKILL.md ~/.claude/skills/disrupted-network/SKILL.md
 
-Run this once per project (safe to re-run):
+# Project-only install
+mkdir -p .claude/skills/disrupted-network
+cp /path/to/disrupted-network/SKILL.md .claude/skills/disrupted-network/SKILL.md
+```
+
+No `CLAUDE.md` changes needed. Claude Code discovers skills automatically from those directories.
+
+**Step 2 — Initialize session state in your project**
+
+Run once per project (safe to re-run):
 
 ```bash
 bash ~/.claude/skills/disrupted-network/scripts/init-session.sh
 ```
 
-This creates `.claude-session/` with all the template files, auto-detects your running proxy, and copies the helper scripts (`netprobe.sh`, `checkpoint.sh`) into `.claude-session/scripts/`.
+This creates `.claude-session/`, auto-detects your running proxy, and copies the helper scripts into `.claude-session/scripts/`.
+
+---
+
+### Windows
+
+The bash scripts (`init-session.sh`, `netprobe.sh`, `checkpoint.sh`) require bash. Run them from **WSL** or **Git Bash** — they will not work in PowerShell or CMD.
+
+**Step 1 — Put the skill where Claude Code can find it**
+
+In PowerShell:
+
+```powershell
+# Create the skills directory
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\skills\disrupted-network"
+
+# Clone the repo into it (requires Git)
+git clone https://github.com/mashfie/disrupted-network "$env:USERPROFILE\.claude\skills\disrupted-network"
+```
+
+Or from WSL / Git Bash:
+
+```bash
+git clone https://github.com/mashfie/disrupted-network ~/.claude/skills/disrupted-network
+```
+
+**Step 2 — Initialize session state in your project (run from WSL or Git Bash)**
+
+```bash
+bash ~/.claude/skills/disrupted-network/scripts/init-session.sh
+```
+
+If you're using Git Bash, replace `~` with the Windows path if needed:
+
+```bash
+bash "$USERPROFILE/.claude/skills/disrupted-network/scripts/init-session.sh"
+```
+
+> `netprobe.sh` and `checkpoint.sh` also require WSL or Git Bash when you need to run them.
+
+---
 
 ### Step 3 — Set up your proxy environment
 
@@ -75,14 +115,14 @@ claude
 **Windows — PowerShell (v2rayN without TUN/tunnel mode):**
 
 ```powershell
-$env:HTTP_PROXY = "http://127.0.0.1:10808"
-$env:HTTPS_PROXY = "http://127.0.0.1:10808"
+$env:HTTP_PROXY = "http://127.0.0.1:10809"
+$env:HTTPS_PROXY = "http://127.0.0.1:10809"
 claude
 ```
 
-Port `10808` is the v2rayN default. If it doesn't work, try `10809` (the dedicated HTTP inbound). Check **v2rayN → Settings → Inbounds** for your actual ports. If you're still not sure, check `https://status.claude.ai` — it may be a service outage, not a proxy issue.
+Port `10809` is v2rayN's dedicated HTTP inbound (SOCKS5 is on `10808`; PowerShell's `HTTP_PROXY` requires an HTTP proxy, not SOCKS5). Check **v2rayN → Settings → Inbounds** for your actual ports. If you're still not sure, check `https://status.claude.ai` — it may be a service outage, not a proxy issue.
 
-> v2rayN tip: recent xray-core versions accept HTTP CONNECT on the same port as SOCKS5, so `10808` often works for both. To persist this across terminals, add the `export` lines to your `~/.bashrc` or `~/.zshrc` (Linux/macOS), or add the PowerShell lines to your `$PROFILE` (Windows).
+> To persist this across terminals, add the `export` lines to your `~/.bashrc` or `~/.zshrc` (Linux/macOS), or add the PowerShell lines to your `$PROFILE` (Windows).
 
 ---
 

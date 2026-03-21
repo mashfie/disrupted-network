@@ -45,9 +45,13 @@ if [ -z "$GATEWAY" ]; then
     GATEWAY=$(netstat -rn 2>/dev/null | awk '/^default/{print $2; exit}')
 fi
 
+# ping -W unit differs: Linux = seconds, macOS = milliseconds
+PING_W=2
+[ "$(uname -s)" = "Darwin" ] && PING_W=2000
+
 echo "Local network:"
 if [ -n "$GATEWAY" ]; then
-    if ping -c 1 -W 2 "$GATEWAY" >/dev/null 2>&1; then
+    if ping -c 1 -W "$PING_W" "$GATEWAY" >/dev/null 2>&1; then
         LOCAL_UP=true
         echo "  Gateway ($GATEWAY): reachable"
     else
@@ -62,8 +66,7 @@ fi
 test_intranet() {
     local url="$1" code
     code=$(curl -s -m 6 -o /dev/null -w "%{http_code}" --noproxy '*' "$url" 2>/dev/null) \
-        || code="TIMEOUT"
-    [ "$code" = "000" ] && code="DNS_FAIL"
+        || code="UNREACHABLE"
     echo "$code"
 }
 
@@ -99,8 +102,7 @@ if [ "$SOCKS5_STATUS" = "LISTENING" ]; then
         local url="$1" code
         code=$(curl -s -m 10 -o /dev/null -w "%{http_code}" \
             --socks5-hostname "127.0.0.1:$SOCKS5_PORT" "$url" 2>/dev/null) \
-            || code="TIMEOUT"
-        [ "$code" = "000" ] && code="CONNECT_FAIL"
+            || code="CONNECT_FAIL"
         echo "$code"
     }
 
@@ -139,6 +141,9 @@ elif [ "$SOCKS5_STATUS" = "NOT_LISTENING" ] && $INTRANET_UP; then
 elif $LOCAL_UP && ! $INTRANET_UP && [ "$SOCKS5_STATUS" = "LISTENING" ]; then
     STATUS="PROXY_DEGRADED"
     ADVICE="Gateway up but even intranet is unreachable — full outage or severe throttling."
+elif $LOCAL_UP && ! $INTRANET_UP && [ "$SOCKS5_STATUS" = "NOT_LISTENING" ]; then
+    STATUS="OFFLINE"
+    ADVICE="Gateway up but no internet connectivity and proxy not running — possible national outage."
 else
     STATUS="OFFLINE"
     ADVICE="Gateway unreachable — full outage or no active network interface."
@@ -156,6 +161,6 @@ if [ -f "$SESSION_DIR/ENVIRONMENT.md" ]; then
 - Proxy (:$SOCKS5_PORT): $SOCKS5_STATUS
 - Local (gateway): $($LOCAL_UP && echo "reachable" || echo "unreachable")
 - Intranet: $($INTRANET_UP && echo "reachable" || echo "unreachable")
-- Foreign (via proxy): $($FOREIGN_UP && echo "reachable" || echo "blocked/skipped") $FOREIGN_DETAIL
+- Foreign (via proxy): $($FOREIGN_UP && echo "reachable" || echo "blocked/skipped")${FOREIGN_DETAIL:+ $FOREIGN_DETAIL}
 EOF
 fi

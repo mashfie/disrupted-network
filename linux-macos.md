@@ -112,7 +112,13 @@ wg show
 # Or use the WireGuard app from the App Store
 ```
 
-All traffic is routed through the interface. No proxy env vars needed — but `netprobe.sh` cannot detect WireGuard this way. Run the probe without a port argument and check if GitHub/PyPI respond with 200.
+All traffic is routed through the interface. No proxy env vars needed — but `netprobe.sh` cannot test foreign reachability for WireGuard. Without a SOCKS5 port, the script skips Layer 3 (GitHub/PyPI) entirely. Test directly instead:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" https://github.com
+```
+
+A `200` or `301` means WireGuard is routing correctly. The gateway ping (Layer 2a) in `netprobe.sh` still works and will tell you if the interface is alive.
 
 ### Sing-box
 

@@ -117,7 +117,6 @@ PROXY_TOOL=$(echo "$PROXY_INFO" | cut -d'|' -f1 | cut -d'=' -f2-)
 PROXY_SOCKS5=$(echo "$PROXY_INFO" | cut -d'|' -f2 | cut -d'=' -f2)
 PROXY_HTTP=$(echo "$PROXY_INFO" | cut -d'|' -f3 | cut -d'=' -f2)
 
-# Build probe command string (avoid underscore separator bug)
 if [ "$PROXY_SOCKS5" != "none" ]; then
     PROBE_CMD="bash .claude-session/scripts/netprobe.sh $PROXY_SOCKS5"
 else
@@ -149,10 +148,10 @@ $(df -h "$PROJECT_ROOT" 2>/dev/null | tail -1 || echo "unknown")
 
 ## Connectivity
 - Run: $PROBE_CMD
-- Do NOT run when offline — probes only make sense with an active connection
+- Run this to diagnose your current network state before starting a session
 
 ## Key Installed Python Packages
-$(pip list 2>&1 | head -40 || pip3 list 2>&1 | head -40 || echo "pip not available")
+$({ pip list 2>/dev/null || pip3 list 2>/dev/null || echo "pip not available"; } | head -40)
 
 ## Project Root
 $PROJECT_ROOT

@@ -2,8 +2,8 @@
 # checkpoint.sh — Append a timestamped entry to PROGRESS.md and update CONTEXT.md
 # Usage: bash .claude-session/scripts/checkpoint.sh "description of what just happened"
 #
-# Can be called by the agent mid-session, or by the user from another terminal
-# if they suspect the connection is about to drop.
+# USER-RUN TOOL. Run this from a second terminal if you think the connection is about
+# to drop. Claude writes session files directly — it does not call this script.
 
 set -euo pipefail
 

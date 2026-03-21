@@ -143,10 +143,7 @@ Generated: [timestamp]
 
 9. **Ensure `TODO.md` reflects reality.** Move completed items to Done. Update priorities.
 
-10. **Run checkpoint:**
-    ```bash
-    bash .claude-session/scripts/checkpoint.sh "description of current state"
-    ```
+10. **Append to `PROGRESS.md` and finalize `CONTEXT.md`.** Do not run `checkpoint.sh` — write the files directly. `checkpoint.sh` is a user tool for manual saves from a second terminal.
 
 ## User Tools
 
@@ -158,7 +155,7 @@ Run before starting a session, or after a failure. Tests three layers:
 
 1. Proxy port (no network needed)
 2. Local network: gateway ping (no external traffic) + intranet endpoints (`snapp.ir`, `arvancloud.ir`, `khamenei.ir`) directly without proxy — reachable for anyone in Iran without a VPN
-3. Foreign endpoints through proxy (`pypi.org`, `github.com`, `npmjs.org`) — only if proxy is up; **never tested without proxy**
+3. Foreign endpoints through proxy (`pypi.org`, `github.com`, `registry.npmjs.org`) — only if proxy is up; **never tested without proxy**
 
 ```bash
 bash .claude-session/scripts/netprobe.sh 10808   # your SOCKS5 port

@@ -1,7 +1,16 @@
 ---
-name: disrupted-network
-description: Resilience protocol for operating Claude Code under severely disrupted, intermittent, or hostile network conditions (VPN drops, internet blackouts, sanctions regimes, unstable connections). Use this skill whenever the user mentions network problems, VPN issues, internet cuts, connection drops, working offline, resuming interrupted sessions, picking up where we left off, session persistence, checkpoint, context loss, or is in a region with known connectivity problems. Also trigger when the user says things like "I lost connection", "continue from last time", "the internet went out", "save state", "write context", or when starting a new session and a `.claude-session/` directory exists in the project root. Even if the user just says "resume" or "what were we doing", check for session state and use this skill.
+name: disrupted-network-v1-archive
+description: ARCHIVED — do not install. Historical v1 of the disrupted-network skill. Use SKILL.md instead.
 ---
+
+> **ARCHIVED — v1.** This is the original version kept for reference only.
+> Use `SKILL.md` (in the repo root) for the current version.
+>
+> Known issues in this version (fixed in current):
+> - Step 3 instructs Claude to run `curl` directly to `pypi.org` without a proxy — exposes your
+>   connection to DPI. The current version never probes foreign endpoints autonomously.
+> - The trigger description is over-broad and fires on words like "continue" or "resume".
+> - No proxy-awareness, no WireGuard/WARP guidance, no DPI documentation.
 
 # Disrupted Network Resilience Protocol
 

@@ -161,6 +161,6 @@ if [ -f "$SESSION_DIR/ENVIRONMENT.md" ]; then
 - Proxy (:$SOCKS5_PORT): $SOCKS5_STATUS
 - Local (gateway): $($LOCAL_UP && echo "reachable" || echo "unreachable")
 - Intranet: $($INTRANET_UP && echo "reachable" || echo "unreachable")
-- Foreign (via proxy): $($FOREIGN_UP && echo "reachable" || echo "blocked/skipped") $FOREIGN_DETAIL
+- Foreign (via proxy): $($FOREIGN_UP && echo "reachable" || echo "blocked/skipped")${FOREIGN_DETAIL:+ $FOREIGN_DETAIL}
 EOF
 fi

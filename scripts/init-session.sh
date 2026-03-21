@@ -117,7 +117,6 @@ PROXY_TOOL=$(echo "$PROXY_INFO" | cut -d'|' -f1 | cut -d'=' -f2-)
 PROXY_SOCKS5=$(echo "$PROXY_INFO" | cut -d'|' -f2 | cut -d'=' -f2)
 PROXY_HTTP=$(echo "$PROXY_INFO" | cut -d'|' -f3 | cut -d'=' -f2)
 
-# Build probe command string (avoid underscore separator bug)
 if [ "$PROXY_SOCKS5" != "none" ]; then
     PROBE_CMD="bash .claude-session/scripts/netprobe.sh $PROXY_SOCKS5"
 else

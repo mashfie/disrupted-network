@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# checkpoint.sh — Append a timestamped entry to PROGRESS.md and update CONTEXT.md
+# Usage: bash .claude-session/scripts/checkpoint.sh "description of what just happened"
+#
+# Can be called by the agent mid-session, or by the user from another terminal
+# if they suspect the connection is about to drop.
+
+set -euo pipefail
+
+SESSION_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+DESCRIPTION="${1:-Manual checkpoint (no description provided)}"
+
+# Ensure progress file exists with header
+if [ ! -f "$SESSION_DIR/PROGRESS.md" ] || ! grep -q "^# Progress Log" "$SESSION_DIR/PROGRESS.md" 2>/dev/null; then
+    printf "# Progress Log\n\n" > "$SESSION_DIR/PROGRESS.md"
+fi
+
+# Append checkpoint entry
+cat >> "$SESSION_DIR/PROGRESS.md" << EOF
+
+## $TIMESTAMP
+- Checkpoint: $DESCRIPTION
+EOF
+
+echo "Checkpointed at $TIMESTAMP: $DESCRIPTION"
+
+# Update the timestamp in CONTEXT.md if it exists
+if [ -f "$SESSION_DIR/CONTEXT.md" ]; then
+    tmp=$(mktemp)
+    sed "s|^Last updated: .*|Last updated: $TIMESTAMP|" "$SESSION_DIR/CONTEXT.md" > "$tmp" \
+        && mv "$tmp" "$SESSION_DIR/CONTEXT.md" \
+        || rm -f "$tmp"
+fi

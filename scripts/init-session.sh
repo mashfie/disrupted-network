@@ -117,6 +117,13 @@ PROXY_TOOL=$(echo "$PROXY_INFO" | cut -d'|' -f1 | cut -d'=' -f2-)
 PROXY_SOCKS5=$(echo "$PROXY_INFO" | cut -d'|' -f2 | cut -d'=' -f2)
 PROXY_HTTP=$(echo "$PROXY_INFO" | cut -d'|' -f3 | cut -d'=' -f2)
 
+# Build probe command string (avoid underscore separator bug)
+if [ "$PROXY_SOCKS5" != "none" ]; then
+    PROBE_CMD="bash .claude-session/scripts/netprobe.sh $PROXY_SOCKS5"
+else
+    PROBE_CMD="bash .claude-session/scripts/netprobe.sh"
+fi
+
 # Regenerate ENVIRONMENT.md (always reflects current state)
 cat > "$SESSION_DIR/ENVIRONMENT.md" << EOF
 # Environment
@@ -141,7 +148,7 @@ $(df -h "$PROJECT_ROOT" 2>/dev/null | tail -1 || echo "unknown")
 - Note: use socks5h:// (not socks5://) in pip/curl to proxy DNS — critical in Iran
 
 ## Connectivity
-- Run: bash .claude-session/scripts/netprobe.sh${PROXY_SOCKS5:+_}${PROXY_SOCKS5//none/}
+- Run: $PROBE_CMD
 - Do NOT run when offline — probes only make sense with an active connection
 
 ## Key Installed Python Packages

@@ -1,6 +1,6 @@
 ---
 name: disrupted-network
-description: Session-persistence protocol for Iranian network disruption — SHOMA filtering, DPI blocking, proxy failures, national outages. Primary purpose: maintain .claude-session/ state so a fresh session can resume without re-explanation after a disconnection. Claude's role is context persistence only; connectivity diagnostics are user-run tools. Trigger on: internet-e-akhundi, اینترنت اخوندی, SHOMA, فیلتر, فیلترشکن, اختلال, قطعی اینترنت, شبکه ملی, Iran, V2Ray, Xray, Psiphon, WARP, WireGuard, Sing-box, Hysteria, Shadowsocks, proxy failed, proxy down, .claude-session/ exists in project root, resume (when session state exists), save state, checkpoint.
+description: Session-persistence protocol for disrupted network conditions — filtering, DPI blocking, proxy failures, national outages. Primary purpose: maintain .claude-session/ state so a fresh session can resume without re-explanation after a disconnection. Claude's role is context persistence only; connectivity diagnostics are user-run tools. Trigger on: .claude-session/ exists in project root, proxy failed, proxy down, network disruption, فیلتر, فیلترشکن.
 ---
 
 # Iranian Network Disruption — Session Persistence Protocol
@@ -140,9 +140,30 @@ Generated: [timestamp]
 
 7. **Write to files, not terminal.** Terminal output is lost on disconnect.
 
-8. **For pip through proxy:**
+8. **For the `claude` CLI through proxy (Linux/macOS):**
    ```bash
-   # socks5h (not socks5) — proxy resolves DNS. Critical: Iran's DNS is poisoned.
+   # socks5h (not socks5) — proxy resolves DNS. Critical: DNS is poisoned.
+   export https_proxy="socks5h://127.0.0.1:10808"
+   export http_proxy="socks5h://127.0.0.1:10808"
+   claude
+
+   # Or using the HTTP proxy port (v2rayN default 10809):
+   export HTTPS_PROXY="http://127.0.0.1:10809"
+   export HTTP_PROXY="http://127.0.0.1:10809"
+   claude
+   ```
+
+   **Windows (PowerShell) — v2rayN without system tunnel mode:**
+   ```powershell
+   $env:HTTP_PROXY = "http://127.0.0.1:10808"
+   $env:HTTPS_PROXY = "http://127.0.0.1:10808"
+   claude
+   ```
+   Port 10808 works as HTTP proxy in recent v2rayN/xray-core. If it doesn't work, try 10809 (the dedicated HTTP port). Check your v2rayN inbound settings for the actual port.
+
+9. **For pip through proxy:**
+   ```bash
+   # socks5h (not socks5) — proxy resolves DNS.
    export https_proxy="socks5h://127.0.0.1:10808"
    export http_proxy="socks5h://127.0.0.1:10808"
    pip install package-name
@@ -151,12 +172,12 @@ Generated: [timestamp]
    pip install package-name --proxy socks5h://127.0.0.1:10808
    ```
 
-9. **For git through proxy:**
-   ```bash
-   git config --global http.proxy "socks5://127.0.0.1:10808"
-   # Unset when proxy is down:
-   git config --global --unset http.proxy
-   ```
+10. **For git through proxy:**
+    ```bash
+    git config --global http.proxy "socks5://127.0.0.1:10808"
+    # Unset when proxy is down:
+    git config --global --unset http.proxy
+    ```
 
 ### On Session End (or Suspected Drop)
 

@@ -26,6 +26,7 @@ All persistence lives in `.claude-session/` at the project root. Create it at th
 ├── DECISIONS.md        # What was decided and why
 ├── FAILED_ATTEMPTS.md  # What failed — prevents loops in future sessions
 ├── ENVIRONMENT.md      # System state, proxy config, last known connectivity
+├── SESSION_LINK.md     # URL of the most recent Claude session (for recovery reference)
 └── scratch/            # Intermediate outputs, cached docs, downloaded wheels
 ```
 
@@ -123,27 +124,31 @@ Generated: [timestamp]
 
 1. **Check for `.claude-session/`.** If it exists: read `CONTEXT.md`, then `TODO.md`, then `FAILED_ATTEMPTS.md`. Give the user a 2-3 line summary of where things stand. Do not ask them to re-explain anything that's in those files.
 
-2. **If no session state exists:** create `.claude-session/` and populate `CONTEXT.md` and `TODO.md` from what the user tells you.
+2. **Check `SESSION_LINK.md` for a prior session URL.** If the file exists and contains a URL (i.e. the `url:` field is not `(not yet recorded)`), present it to the user:
+   > "There's a link to your previous Claude session: [URL] — open it in your browser to reference the conversation history, or just continue with the saved context."
+   Then **overwrite `SESSION_LINK.md`** with the current session's URL and a fresh timestamp, so the next recovery attempt uses this session. The current session URL is provided in your system context — it is the URL appended to git commit messages in the format `https://claude.ai/code/session_<ID>`. If no session URL is available (e.g. running in CLI without web harness), write `(not available in this environment)` instead.
 
-3. **Ask about connection stability — not current state.** The connection is clearly working right now or you wouldn't be here. The useful question is: *"Is this a stable window, or are you in a choppy session? If unstable, I'll checkpoint more aggressively and finish each piece fully before starting the next."* Adjust the work plan accordingly.
+3. **If no session state exists:** create `.claude-session/` and populate `CONTEXT.md` and `TODO.md` from what the user tells you. Write the current session URL to `SESSION_LINK.md` (or the unavailability note if no URL exists).
+
+4. **Ask about connection stability — not current state.** The connection is clearly working right now or you wouldn't be here. The useful question is: *"Is this a stable window, or are you in a choppy session? If unstable, I'll checkpoint more aggressively and finish each piece fully before starting the next."* Adjust the work plan accordingly.
 
 ### During Work
 
-4. **Checkpoint after every meaningful unit of work.** Meaningful unit = a function complete, a file done, a decision made, or any point where losing context costs more than 2 minutes to reconstruct. Update `PROGRESS.md` and `CONTEXT.md` every time.
+5. **Checkpoint after every meaningful unit of work.** Meaningful unit = a function complete, a file done, a decision made, or any point where losing context costs more than 2 minutes to reconstruct. Update `PROGRESS.md` and `CONTEXT.md` every time.
 
-5. **Offline work first, network work batched.** When a connection window opens, work through "Needs connection" tasks top-to-bottom. Batch multiple `pip install` calls into one.
+6. **Offline work first, network work batched.** When a connection window opens, work through "Needs connection" tasks top-to-bottom. Batch multiple `pip install` calls into one.
 
-6. **When a network operation fails:** log immediately in `FAILED_ATTEMPTS.md` with the exact error (timeout? TCP RST? CONNECT_FAIL? DNS NXDOMAIN? HTTP 403?). Move the task to "Needs connection" in `TODO.md`. Continue with offline work — never stall.
+7. **When a network operation fails:** log immediately in `FAILED_ATTEMPTS.md` with the exact error (timeout? TCP RST? CONNECT_FAIL? DNS NXDOMAIN? HTTP 403?). Move the task to "Needs connection" in `TODO.md`. Continue with offline work — never stall.
 
-7. **Write to files, not terminal.** Terminal output is lost on disconnect. If it matters, it goes in a file.
+8. **Write to files, not terminal.** Terminal output is lost on disconnect. If it matters, it goes in a file.
 
 ### On Session End (or Suspected Drop)
 
-8. **Write a full `CONTEXT.md` update.** The next session knows nothing about this one. Be pedantically specific: exact file, line number, what the partial state is, what the next step is. "I was editing line 47 of `src/pipeline.py`, adding the `normalize` parameter to `process_batch()`. The function signature is updated but the body is not."
+9. **Write a full `CONTEXT.md` update.** The next session knows nothing about this one. Be pedantically specific: exact file, line number, what the partial state is, what the next step is. "I was editing line 47 of `src/pipeline.py`, adding the `normalize` parameter to `process_batch()`. The function signature is updated but the body is not."
 
-9. **Ensure `TODO.md` reflects reality.** Move completed items to Done. Update priorities.
+10. **Ensure `TODO.md` reflects reality.** Move completed items to Done. Update priorities.
 
-10. **Append to `PROGRESS.md` and finalize `CONTEXT.md`.** Do not run `checkpoint.sh` — write the files directly. `checkpoint.sh` is a user tool for manual saves from a second terminal.
+11. **Append to `PROGRESS.md` and finalize `CONTEXT.md`.** Do not run `checkpoint.sh` — write the files directly. `checkpoint.sh` is a user tool for manual saves from a second terminal.
 
 ## User Tools
 

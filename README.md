@@ -15,6 +15,7 @@ Every session writes state into a `.claude-session/` directory in your project:
 - `PROGRESS.md` — append-only log of completed steps
 - `FAILED_ATTEMPTS.md` — what failed and why, so the next session doesn't repeat it
 - `ENVIRONMENT.md` — your proxy config and last known connectivity
+- `SESSION_LINK.md` — URL of the previous Claude session (offered as a reference on resume)
 
 When a new session starts and you invoke the skill, Claude reads those files and gives you a 2-3 line briefing. No re-explaining. You just continue.
 
@@ -115,6 +116,12 @@ My proxy is V2Ray SOCKS5 on 10808.
 Claude reads `.claude-session/CONTEXT.md` and responds with something like:
 
 > "We were refactoring `extract_features()` in `src/pipeline.py` — the function signature was updated but the body wasn't finished. `TODO.md` has two tasks queued for when you have a connection. Ready to continue?"
+
+If a previous session URL was saved, Claude also offers it:
+
+> "There's a link to your previous Claude session: https://claude.ai/code/session_XYZ — open it in your browser to reference the conversation history, or just continue with the saved context."
+
+This lets you open the old session as a read-only reference alongside the new one.
 
 ### Checking connectivity before a session
 

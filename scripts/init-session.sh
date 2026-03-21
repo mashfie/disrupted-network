@@ -4,7 +4,7 @@
 #
 # Creates the session directory structure, auto-detects proxy config,
 # and populates ENVIRONMENT.md with current system state.
-# Safe to re-run — will not overwrite CONTEXT.md, TODO.md, or PROGRESS.md.
+# Safe to re-run — will not overwrite CONTEXT.md, TODO.md, PROGRESS.md, or SESSION_LINK.md.
 
 set -euo pipefail
 
@@ -80,6 +80,18 @@ fi
 
 if [ ! -f "$SESSION_DIR/FAILED_ATTEMPTS.md" ]; then
     printf "# Failed Attempts\n" > "$SESSION_DIR/FAILED_ATTEMPTS.md"
+fi
+
+if [ ! -f "$SESSION_DIR/SESSION_LINK.md" ]; then
+    cat > "$SESSION_DIR/SESSION_LINK.md" << 'EOF'
+# Previous Session Link
+Last updated: __TIMESTAMP__
+
+<!-- Claude: overwrite the url field below with your session URL at session start -->
+url: (not yet recorded)
+EOF
+    tmp=$(mktemp) && sed "s|__TIMESTAMP__|$TIMESTAMP|" "$SESSION_DIR/SESSION_LINK.md" > "$tmp" \
+        && mv "$tmp" "$SESSION_DIR/SESSION_LINK.md"
 fi
 
 # Auto-detect proxy (check common Iranian proxy ports)

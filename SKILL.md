@@ -1,6 +1,6 @@
 ---
 name: disrupted-network
-description: Session-persistence protocol for disrupted network conditions. Reads and maintains .claude-session/ state so a fresh Claude Code session can resume work immediately after a disconnection, without the user re-explaining anything.
+description: Persist .claude-session/ state to survive network drops; resume work in fresh sessions without re-explaining context.
 disable-model-invocation: true
 ---
 
@@ -12,7 +12,7 @@ If you are here, the connection is alive. What you manage is what's on disk when
 
 ## The fundamental limitation
 
-**Only what's been written to disk before a drop survives.** If the connection dies while you are mid-response, that response is gone — the user gets back the last checkpoint. This is why you checkpoint aggressively and continuously, not just at the end. There is no way around this; disk-first is the entire strategy.
+**Only what's been written to disk before a drop survives.** If the connection dies mid-response, that response is gone — the user gets back the last checkpoint. Checkpoint aggressively and continuously; disk-first is the entire strategy.
 
 ## Session State Directory
 
@@ -31,8 +31,6 @@ All persistence lives in `.claude-session/` at the project root. Create it at th
 ```
 
 ### CONTEXT.md — the most critical file
-
-Written as a briefing for a session that knows nothing:
 
 ```markdown
 # Session Context
@@ -65,11 +63,9 @@ Last updated: [ISO timestamp]
 
 ## Needs connection (queue for next window)
 - [ ] pip install scipy
-- [ ] git push origin main
 
 ## Ready offline
 - [ ] Refactor extract_features() in src/pipeline.py
-- [ ] Write tests for the parser
 
 ## Done
 - [x] Set up project structure
@@ -103,8 +99,7 @@ Generated: [timestamp]
 
 ## System
 - OS: [Linux distro + kernel / macOS version]
-- Python: [version]
-- Node: [version]
+- Python / Node: [versions]
 
 ## Proxy
 - Tool: [V2Ray / Xray / Psiphon / WARP / WireGuard / Sing-box / Hysteria2 / Shadowsocks]
@@ -113,54 +108,49 @@ Generated: [timestamp]
 - Last confirmed working: [ISO timestamp]
 
 ## Connectivity
-- Last probe: [ISO timestamp — run by user via netprobe.sh]
+- Last probe: [ISO timestamp]
 - Result: [CONNECTED / PROXY_DEGRADED / PROXY_DOWN / OFFLINE]
-- Note: probe only pings local gateway and intranet endpoints; all foreign checks go through proxy
 ```
 
 ## Operating Procedures
 
 ### On Session Start
 
-1. **Check for `.claude-session/`.** If it exists: read `CONTEXT.md`, then `TODO.md`, then `FAILED_ATTEMPTS.md`. Give the user a 2-3 line summary of where things stand. Do not ask them to re-explain anything that's in those files.
+1. **Check for `.claude-session/`.** If it exists: read `CONTEXT.md`, then `TODO.md`, then `FAILED_ATTEMPTS.md`. Give the user a 2-3 line summary. Do not ask them to re-explain anything already in those files.
 
-2. **Check `SESSION_LINK.md` for a prior session URL.** If the file exists and contains a URL (i.e. the `url:` field is not `(not yet recorded)`), present it to the user:
+2. **Check `SESSION_LINK.md` for a prior session URL.** If the `url:` field is not `(not yet recorded)`, present it:
    > "There's a link to your previous Claude session: [URL] — open it in your browser to reference the conversation history, or just continue with the saved context."
-   Then **overwrite `SESSION_LINK.md`** with the current session's URL and a fresh timestamp, so the next recovery attempt uses this session. The current session URL is provided in your system context — it is the URL appended to git commit messages in the format `https://claude.ai/code/session_<ID>`. If no session URL is available (e.g. running in CLI without web harness), write `(not available in this environment)` instead.
+   Then **overwrite `SESSION_LINK.md`** with the current session URL. The URL is appended to git commit messages as `https://claude.ai/code/session_<ID>`. If unavailable, write `(not available in this environment)`.
 
-3. **If no session state exists:** create `.claude-session/` and populate `CONTEXT.md` and `TODO.md` from what the user tells you. Write the current session URL to `SESSION_LINK.md` (or the unavailability note if no URL exists).
+3. **If no session state exists:** create `.claude-session/` and populate `CONTEXT.md` and `TODO.md` from what the user tells you. Write the current session URL to `SESSION_LINK.md`.
 
-4. **Ask about connection stability — not current state.** The connection is clearly working right now or you wouldn't be here. The useful question is: *"Is this a stable window, or are you in a choppy session? If unstable, I'll checkpoint more aggressively and finish each piece fully before starting the next."* Adjust the work plan accordingly.
+4. **Ask about connection stability — not current state.** The connection is working or you wouldn't be here. Useful question: *"Is this a stable window, or are you in a choppy session? If unstable, I'll checkpoint more aggressively and finish each piece fully before starting the next."*
 
 ### During Work
 
-5. **Checkpoint after every meaningful unit of work.** Meaningful unit = a function complete, a file done, a decision made, or any point where losing context costs more than 2 minutes to reconstruct. Update `PROGRESS.md` and `CONTEXT.md` every time.
+5. **Checkpoint after every meaningful unit of work.** A function complete, a file done, a decision made — any point where losing context costs more than 2 minutes to reconstruct. Update `PROGRESS.md` and `CONTEXT.md` every time.
 
 6. **Offline work first, network work batched.** When a connection window opens, work through "Needs connection" tasks top-to-bottom. Batch multiple `pip install` calls into one.
 
-7. **When a network operation fails:** log immediately in `FAILED_ATTEMPTS.md` with the exact error (timeout? TCP RST? CONNECT_FAIL? DNS NXDOMAIN? HTTP 403?). Move the task to "Needs connection" in `TODO.md`. Continue with offline work — never stall.
+7. **When a network operation fails:** log immediately in `FAILED_ATTEMPTS.md` with the exact error. Move the task to "Needs connection" in `TODO.md`. Continue with offline work — never stall.
 
 8. **Write to files, not terminal.** Terminal output is lost on disconnect. If it matters, it goes in a file.
 
 ### On Session End (or Suspected Drop)
 
-9. **Write a full `CONTEXT.md` update.** The next session knows nothing about this one. Be pedantically specific: exact file, line number, what the partial state is, what the next step is. "I was editing line 47 of `src/pipeline.py`, adding the `normalize` parameter to `process_batch()`. The function signature is updated but the body is not."
+9. **Write a full `CONTEXT.md` update.** The next session knows nothing. Be specific: exact file, line number, partial state, next step. E.g.: "Editing line 47 of `src/pipeline.py`, adding `normalize` to `process_batch()`. Signature updated, body not yet."
 
 10. **Ensure `TODO.md` reflects reality.** Move completed items to Done. Update priorities.
 
-11. **Append to `PROGRESS.md` and finalize `CONTEXT.md`.** Do not run `checkpoint.sh` — write the files directly. `checkpoint.sh` is a user tool for manual saves from a second terminal.
+11. **Append to `PROGRESS.md` and finalize `CONTEXT.md`.** Write the files directly — do not run `checkpoint.sh` (that's a user tool).
 
 ## User Tools
 
-These scripts are deployed to `.claude-session/scripts/` by `init-session.sh`. **The user runs them from their terminal — Claude does not run them autonomously.**
+These scripts are deployed to `.claude-session/scripts/` by `init-session.sh`. **The user runs them — Claude does not run them autonomously.**
 
 ### netprobe.sh
 
-Run before starting a session, or after a failure. Tests three layers:
-
-1. Proxy port (no network needed)
-2. Local network: gateway ping (no external traffic) + intranet endpoints (`snapp.ir`, `arvancloud.ir`, `khamenei.ir`) directly without proxy — reachable for anyone in Iran without a VPN
-3. Foreign endpoints through proxy (`pypi.org`, `github.com`, `registry.npmjs.org`) — only if proxy is up; **never tested without proxy**
+Tests three layers: proxy port → local network (gateway + intranet) → foreign endpoints through proxy.
 
 ```bash
 bash .claude-session/scripts/netprobe.sh 10808   # your SOCKS5 port
@@ -169,13 +159,13 @@ bash .claude-session/scripts/netprobe.sh 10808   # your SOCKS5 port
 | Result | Meaning |
 |--------|---------|
 | CONNECTED | Proxy working, foreign reachable |
-| PROXY_DEGRADED | Local network up, proxy up, foreign blocked — DPI active or remote server unreachable (one variant: even intranet unreachable — full outage or severe throttling) |
-| PROXY_DOWN | Local network up, proxy not running — start your proxy tool |
-| OFFLINE | No internet access — gateway unreachable, or local-only connectivity with proxy not running |
+| PROXY_DEGRADED | Local up, proxy up, foreign blocked — DPI or remote server issue |
+| PROXY_DOWN | Local up, proxy not running |
+| OFFLINE | No internet access |
 
 ### checkpoint.sh
 
-Manual checkpoint from a second terminal if the connection seems unstable:
+Manual checkpoint from a second terminal:
 
 ```bash
 bash .claude-session/scripts/checkpoint.sh "description"
@@ -217,14 +207,14 @@ For interface-based tools (WireGuard, WARP), there is no SOCKS5 port — verify 
 ## Communication Guidelines
 
 - **On resume:** 2-3 lines: what we were doing, where we stopped, what's next.
-- **On suspected drop:** Checkpoint proactively — "Saving state now. If we get cut off, the next session resumes from here."
-- **On network failure during work:** "Logged in FAILED_ATTEMPTS.md. Here's what I can do offline: [list]."
+- **On suspected drop:** "Saving state now. If we get cut off, the next session resumes from here."
+- **On network failure:** "Logged in FAILED_ATTEMPTS.md. Here's what I can do offline: [list]."
 - **On ambiguity:** "Based on the session state, I think we were doing X — continue?" Never guess and run.
 
 ## Anti-Patterns
 
 - **Don't run connectivity probes.** If you're here, the connection is working. Probes are the user's job.
-- **Don't run `checkpoint.sh`.** Write the session files directly. `checkpoint.sh` is a second-terminal tool for the user.
+- **Don't run `checkpoint.sh`.** Write the session files directly.
 - **Don't retry failed network operations in a loop.** Log and move on.
 - **Don't assume the next session is you.** Write `CONTEXT.md` for a stranger.
 - **Don't leave state in terminal output.** Files only.

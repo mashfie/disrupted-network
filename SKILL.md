@@ -27,6 +27,7 @@ All persistence lives in `.claude-session/` at the project root. Create it at th
 ├── FAILED_ATTEMPTS.md  # What failed — prevents loops in future sessions
 ├── ENVIRONMENT.md      # System state, proxy config, last known connectivity
 ├── SESSION_LINK.md     # URL of the most recent Claude session (for recovery reference)
+├── COMPACT_LOG.md      # Append-only log of context compaction events
 └── scratch/            # Intermediate outputs, cached docs, downloaded wheels
 ```
 
@@ -91,6 +92,14 @@ Last updated: [ISO timestamp]
 - Retry if: [what would need to change]
 ```
 
+### COMPACT_LOG.md — compaction events
+
+```markdown
+## [ISO timestamp]
+- State before: [what was in progress at time of compaction]
+- Summary captured: [yes / partial / unknown]
+```
+
 ### ENVIRONMENT.md
 
 ```markdown
@@ -122,27 +131,31 @@ Generated: [timestamp]
    > "There's a link to your previous Claude session: [URL] — open it in your browser to reference the conversation history, or just continue with the saved context."
    Then **overwrite `SESSION_LINK.md`** with the current session URL. The URL is appended to git commit messages as `https://claude.ai/code/session_<ID>`. If unavailable, write `(not available in this environment)`.
 
-3. **If no session state exists:** create `.claude-session/` and populate `CONTEXT.md` and `TODO.md` from what the user tells you. Write the current session URL to `SESSION_LINK.md`.
+3. **Check `COMPACT_LOG.md`.** If it exists and is non-empty, note it to the user: "Context was compacted during a recent session — check `COMPACT_LOG.md` if anything seems missing." Then continue normally.
 
-4. **Ask about connection stability — not current state.** The connection is working or you wouldn't be here. Useful question: *"Is this a stable window, or are you in a choppy session? If unstable, I'll checkpoint more aggressively and finish each piece fully before starting the next."*
+4. **If no session state exists:** create `.claude-session/` and populate `CONTEXT.md` and `TODO.md` from what the user tells you. Write the current session URL to `SESSION_LINK.md`.
+
+5. **Ask about connection stability — not current state.** The connection is working or you wouldn't be here. Useful question: *"Is this a stable window, or are you in a choppy session? If unstable, I'll checkpoint more aggressively and finish each piece fully before starting the next."*
 
 ### During Work
 
-5. **Checkpoint after every meaningful unit of work.** A function complete, a file done, a decision made — any point where losing context costs more than 2 minutes to reconstruct. Update `PROGRESS.md` and `CONTEXT.md` every time.
+6. **Checkpoint after every meaningful unit of work.** A function complete, a file done, a decision made — any point where losing context costs more than 2 minutes to reconstruct. Update `PROGRESS.md` and `CONTEXT.md` every time.
 
-6. **Offline work first, network work batched.** When a connection window opens, work through "Needs connection" tasks top-to-bottom. Batch multiple `pip install` calls into one.
+7. **On context compaction: checkpoint first.** If the context window is near its limit, write `CONTEXT.md` and `PROGRESS.md` before compaction occurs — the compact summary may not capture in-progress work. After compaction, append an entry to `COMPACT_LOG.md`.
 
-7. **When a network operation fails:** log immediately in `FAILED_ATTEMPTS.md` with the exact error. Move the task to "Needs connection" in `TODO.md`. Continue with offline work — never stall.
+8. **Offline work first, network work batched.** When a connection window opens, work through "Needs connection" tasks top-to-bottom. Batch multiple `pip install` calls into one.
 
-8. **Write to files, not terminal.** Terminal output is lost on disconnect. If it matters, it goes in a file.
+9. **When a network operation fails:** log immediately in `FAILED_ATTEMPTS.md` with the exact error. Move the task to "Needs connection" in `TODO.md`. Continue with offline work — never stall.
+
+10. **Write to files, not terminal.** Terminal output is lost on disconnect. If it matters, it goes in a file.
 
 ### On Session End (or Suspected Drop)
 
-9. **Write a full `CONTEXT.md` update.** The next session knows nothing. Be specific: exact file, line number, partial state, next step. E.g.: "Editing line 47 of `src/pipeline.py`, adding `normalize` to `process_batch()`. Signature updated, body not yet."
+11. **Write a full `CONTEXT.md` update.** The next session knows nothing. Be specific: exact file, line number, partial state, next step. E.g.: "Editing line 47 of `src/pipeline.py`, adding `normalize` to `process_batch()`. Signature updated, body not yet." If a compaction occurred during this session, also append an entry to `COMPACT_LOG.md`.
 
-10. **Ensure `TODO.md` reflects reality.** Move completed items to Done. Update priorities.
+12. **Ensure `TODO.md` reflects reality.** Move completed items to Done. Update priorities.
 
-11. **Append to `PROGRESS.md` and finalize `CONTEXT.md`.** Write the files directly — do not run `checkpoint.sh` (that's a user tool).
+13. **Append to `PROGRESS.md` and finalize `CONTEXT.md`.** Write the files directly — do not run `checkpoint.sh` (that's a user tool).
 
 ## User Tools
 
@@ -170,6 +183,55 @@ Manual checkpoint from a second terminal:
 ```bash
 bash .claude-session/scripts/checkpoint.sh "description"
 ```
+
+### PreCompact hook (optional)
+
+Injects current `CONTEXT.md` into the compact summary so disk state survives compaction. Add to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreCompact": [{
+      "hooks": [{
+        "type": "command",
+        "command": "[ -f .claude-session/CONTEXT.md ] && echo \"{\\\"additionalContext\\\": \\\"$(cat .claude-session/CONTEXT.md | tr '\\n' ' ' | sed 's/\"/\\\\\"/g')\\\"}\""
+      }]
+    }]
+  }
+}
+```
+
+### SessionStart hook (optional)
+
+Auto-injects `CONTEXT.md` at every session start — no need to type `/disrupted-network` on resume. Add to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [{
+      "hooks": [{
+        "type": "command",
+        "command": "[ -f .claude-session/CONTEXT.md ] && echo \"{\\\"additionalContext\\\": \\\"$(cat .claude-session/CONTEXT.md | tr '\\n' ' ' | sed 's/\"/\\\\\"/g')\\\"}\""
+      }]
+    }]
+  }
+}
+```
+
+Still run `/disrupted-network` manually for the full resume briefing and session URL handling. This hook pre-loads context silently.
+
+### Native session resume (`claude -c` / `claude -r`)
+
+```bash
+claude -c                   # resume most recent session via conversation history
+claude -r <session_id>      # resume a specific session by ID
+```
+
+**Use disk state (this skill) instead when:**
+- The session was fully dropped and history is gone
+- Connection died before history was saved server-side
+
+**Rule of thumb:** try `claude -c` first; if it returns wrong or empty context, use `/disrupted-network`.
 
 ## Proxy-Aware Code Patterns
 
@@ -221,3 +283,4 @@ For interface-based tools (WireGuard, WARP), there is no SOCKS5 port — verify 
 - **Don't checkpoint only at the end.** You may not get to the end.
 - **Don't delete `FAILED_ATTEMPTS.md` entries.**
 - **Don't ask the user to re-explain what's in the session files.** Read first.
+- **Don't treat compaction as a safe pause.** Compaction discards conversation history. Checkpoint `CONTEXT.md` before it if in-progress work hasn't been written to disk.

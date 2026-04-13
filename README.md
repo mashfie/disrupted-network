@@ -16,6 +16,7 @@ Every session writes state into a `.claude-session/` directory in your project:
 - `FAILED_ATTEMPTS.md` — what failed and why, so the next session doesn't repeat it
 - `ENVIRONMENT.md` — your proxy config and last known connectivity
 - `SESSION_LINK.md` — URL of the previous Claude session (offered as a reference on resume)
+- `COMPACT_LOG.md` — log of context compaction events; checked on resume if context was compacted
 
 When a new session starts and you invoke the skill, Claude reads those files and gives you a 2-3 line briefing. No re-explaining. You just continue.
 
@@ -84,6 +85,17 @@ claude
 Port `10809` is v2rayN's HTTP inbound. PowerShell requires an HTTP proxy, not SOCKS5. See `windows.md` for WSL2 and Git Bash variants.
 
 > To persist across terminals: add the `export` lines to `~/.bashrc` or `~/.zshrc` (Linux/macOS), or to your `$PROFILE` (PowerShell).
+
+---
+
+### Optional: hooks
+
+Two hooks automate checkpoint and resume behavior — both configured in `.claude/settings.json`:
+
+- **PreCompact** — injects `CONTEXT.md` into the compact summary before Claude Code compacts the context window, so disk state survives compaction.
+- **SessionStart** — injects `CONTEXT.md` at the start of every new session, removing the need to type `/disrupted-network` on resume.
+
+See `SKILL.md` under "User Tools" for the exact JSON configuration.
 
 ---
 
